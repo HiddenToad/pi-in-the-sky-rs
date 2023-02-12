@@ -7,6 +7,7 @@ const SCREEN_HALF: u32 = SCREEN_SIZE / 2;
 const PIE_RADIUS: f32 = 50.;
 const PIE_BACKGROUND: Color = GRAY;
 const PIE_ACCEL: f32 = 0.1;
+const PIE_SPAWN_RATE: u64 = 45;
 
 fn main() {
     nannou::app(model).update(update).run();
@@ -38,15 +39,15 @@ impl Pie {
     }
 }
 
-impl Drop for Pie{
-    fn drop(&mut self) {
-        println!("dropping pie: {:?}", self)
-    }
-}
 
 struct Model {
     _window: window::Id,
     pies: Vec<Pie>
+}
+impl Model{
+    fn spawn_pie(&mut self){
+        self.pies.push(Pie::new())
+    }
 }
 
 fn model(app: &App) -> Model {
@@ -57,16 +58,18 @@ fn model(app: &App) -> Model {
         .size(SCREEN_SIZE, SCREEN_SIZE)
         .build()
         .unwrap();
-    Model { _window, pies: vec![Pie::new(), Pie::new(), Pie::new()] }
+    Model { _window, pies: vec![] }
 }
 
 fn update(app: &App, model: &mut Model, update: Update) {
-    for (i, pie) in model.pies.iter_mut().enumerate(){
+    for pie in model.pies.iter_mut(){
         pie.velocity -= PIE_ACCEL;
         pie.pos.y += pie.velocity;
-
     }
     model.pies.retain(|pie|{ pie.pos.y - PIE_RADIUS > -(SCREEN_HALF as f32)});
+    if app.elapsed_frames() % PIE_SPAWN_RATE == 0{
+        model.spawn_pie();
+    }
 }
 
 fn event(app: &App, model: &mut Model, event: WindowEvent) {}
