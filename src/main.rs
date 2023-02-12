@@ -2,12 +2,16 @@ use nannou::prelude::*;
 
 type Color = Srgb<u8>;
 
-const SCREEN_SIZE: u32 = 1000;
+const SCREEN_SIZE: u32 = 700;
 const SCREEN_HALF: u32 = SCREEN_SIZE / 2;
 const PIE_RADIUS: f32 = 50.;
 const PIE_BACKGROUND: Color = GRAY;
 const PIE_ACCEL: f32 = 0.1;
 const PIE_SPAWN_RATE: u64 = 45;
+const PLATE_W: f32 = 100.;
+const PLATE_H: f32 = 20.;
+const PLATE_Y: f32 = -(SCREEN_HALF as f32) + (PLATE_H as f32 / 2.);
+const PLATE_COLOR: Color = BLACK;
 
 //remove this once pies are drawn with slices
 const SLICES_FONT_SIZE: u32 = 75;
@@ -44,9 +48,14 @@ impl Pie {
     }
 }
 
+struct PiePlate {
+    x: f32,
+}
+
 struct Model {
     _window: window::Id,
     pies: Vec<Pie>,
+    plate: PiePlate,
 }
 impl Model {
     fn spawn_pie(&mut self) {
@@ -65,6 +74,7 @@ fn model(app: &App) -> Model {
     Model {
         _window,
         pies: vec![],
+        plate: PiePlate { x: 0. },
     }
 }
 
@@ -75,13 +85,20 @@ fn update(app: &App, model: &mut Model, update: Update) {
     }
     model
         .pies
-        .retain(|pie| pie.pos.y - PIE_RADIUS > -(SCREEN_HALF as f32));
+        .retain(|pie| pie.pos.y + PIE_RADIUS > -(SCREEN_HALF as f32));
     if app.elapsed_frames() % PIE_SPAWN_RATE == 0 {
         model.spawn_pie();
     }
 }
 
-fn event(app: &App, model: &mut Model, event: WindowEvent) {}
+fn event(app: &App, model: &mut Model, event: WindowEvent) {
+    match event {
+        MouseMoved(pos) => {
+            model.plate.x = pos.x;
+        }
+        _ => {}
+    }
+}
 
 fn view(app: &App, model: &Model, frame: Frame) {
     let draw = app.draw();
@@ -96,5 +113,10 @@ fn view(app: &App, model: &Model, frame: Frame) {
             .font_size(SLICES_FONT_SIZE)
             .color(WHITE);
     }
+
+    draw.rect()
+        .w_h(PLATE_W, PLATE_H)
+        .x_y(model.plate.x, PLATE_Y)
+        .color(PLATE_COLOR);
     draw.to_frame(app, &frame).unwrap();
 }
