@@ -1,5 +1,4 @@
-use std::{collections::HashMap, process::exit};
-use nannou_egui::{self, egui, Egui};
+use std::{collections::HashMap};
 use nannou::prelude::*;
 
 mod consts;
@@ -120,7 +119,7 @@ fn model(app: &App) -> Model {
     Model::new(_window)
 }
 
-fn update(app: &App, model: &mut Model, update: Update) {
+fn update(app: &App, model: &mut Model, _: Update) {
     if model.scene != Scene::Game{
         return;
     }
@@ -150,7 +149,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
     }
 }
 
-fn event(app: &App, model: &mut Model, event: WindowEvent) {
+fn event(_: &App, model: &mut Model, event: WindowEvent) {
     match event {
         MouseMoved(pos) => {
             model.plate.x = pos.x;
@@ -173,7 +172,7 @@ fn event(app: &App, model: &mut Model, event: WindowEvent) {
     }
 }
 
-fn start_view(app: &App, model: &Model, frame: Frame){
+fn start_view(app: &App, _: &Model, frame: Frame){
     let draw = app.draw();
     frame.clear(WHITE);
     draw.text("Press ENTER to begin!").center_justify().x_y(0., 0.).font_size(30).color(BLACK);
@@ -203,14 +202,16 @@ fn game_view(app: &App, model: &Model, frame: Frame){
         .x_y(model.plate.x, PLATE_Y)
         .color(PLATE_COLOR);
 
+    //current digit
     draw.text(&model.digits[model.digit_idx].to_string())
         .font_size(50)
         .x(-(SCREEN_HALF as f32) + 50.)
         .y(SCREEN_HALF as f32 - 50.)
         .color(BLACK);
     draw.to_frame(app, &frame).unwrap();
+
 }
-fn game_over_view(app: &App, model: &Model, frame: Frame){
+fn game_over_view(app: &App, _: &Model, frame: Frame){
     let draw = app.draw();
     frame.clear(WHITE);
     draw.text("Game over! Press ENTER to retry, or ESC to quit!").center_justify().x_y(0., 0.).font_size(30).color(BLACK);
