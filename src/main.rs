@@ -1,20 +1,9 @@
-use nannou::prelude::*;
+use std::{collections::HashMap, process::exit};
 
-type Color = Srgb<u8>;
+use nannou::{color::white_point::E, prelude::*};
 
-const SCREEN_SIZE: u32 = 700;
-const SCREEN_HALF: u32 = SCREEN_SIZE / 2;
-const PIE_RADIUS: f32 = 50.;
-const PIE_BACKGROUND: Color = GRAY;
-const PIE_ACCEL: f32 = 0.1;
-const PIE_SPAWN_RATE: u64 = 45;
-const PLATE_W: f32 = 100.;
-const PLATE_H: f32 = 20.;
-const PLATE_Y: f32 = -(SCREEN_HALF as f32) + (PLATE_H as f32 / 2.);
-const PLATE_COLOR: Color = BLACK;
-
-//remove this once pies are drawn with slices
-const SLICES_FONT_SIZE: u32 = 75;
+mod consts;
+use consts::*;
 
 fn main() {
     nannou::app(model).update(update).run();
@@ -46,6 +35,22 @@ impl Pie {
             ),
         }
     }
+    fn collides(&self, plate: &PiePlate) -> bool {
+        let dist = pt2((self.pos.x - plate.x).abs(), (self.pos.y - PLATE_Y).abs());
+
+        //if distance is greater than both dimensions
+        if dist.x > (PLATE_W / 2. + PIE_RADIUS) && dist.x > (PLATE_H / 2. + PIE_RADIUS) {
+            false
+        //if distance is less than plate dimensions
+        } else if dist.x <= PLATE_W / 2. && dist.y <= PLATE_H / 2. {
+            true
+        //handle possibility of corners
+        } else {
+            let corner_dist_sq_sum =
+                (dist.x - PLATE_W / 2.).powf(2.) + (dist.y - PLATE_H / 2.).powf(2.);
+            corner_dist_sq_sum <= PIE_RADIUS.powf(2.)
+        }
+    }
 }
 
 struct PiePlate {
@@ -56,8 +61,26 @@ struct Model {
     _window: window::Id,
     pies: Vec<Pie>,
     plate: PiePlate,
+    digit_idx: usize,
+    abs_digit_idx: usize,
+    digits: Vec<u8>,
 }
 impl Model {
+    fn load_digits(&mut self) {
+        self.digits = reqwest::blocking::get(&format!(
+            "https://api.pi.delivery/v1/pi?start={}&numberOfDigits={DIGITS_LOADED_AT_ONCE}",
+            self.abs_digit_idx
+        ))
+        .unwrap()
+        .json::<HashMap<String, String>>()
+        .unwrap()
+        .get("content")
+        .unwrap()
+        .chars()
+        .map(|c| c.to_digit(10).unwrap() as u8)
+        .collect::<Vec<_>>();
+    }
+
     fn spawn_pie(&mut self) {
         self.pies.push(Pie::new())
     }
@@ -71,11 +94,17 @@ fn model(app: &App) -> Model {
         .size(SCREEN_SIZE, SCREEN_SIZE)
         .build()
         .unwrap();
-    Model {
+
+    let mut model = Model {
         _window,
         pies: vec![],
         plate: PiePlate { x: 0. },
-    }
+        digit_idx: 0,
+        abs_digit_idx: 0,
+        digits: vec![],
+    };
+    model.load_digits();
+    model
 }
 
 fn update(app: &App, model: &mut Model, update: Update) {
@@ -83,9 +112,25 @@ fn update(app: &App, model: &mut Model, update: Update) {
         pie.velocity -= PIE_ACCEL;
         pie.pos.y += pie.velocity;
     }
-    model
-        .pies
-        .retain(|pie| pie.pos.y + PIE_RADIUS > -(SCREEN_HALF as f32));
+    model.pies.retain(|pie| {
+        let collides = pie.collides(&model.plate);
+        if pie.pos.y + PIE_RADIUS > -(SCREEN_HALF as f32) && !collides {
+            true
+        } else if collides {
+            if let Some(digit) = model.digits.get(model.digit_idx) {
+                if pie.slices != *digit {
+                    //TODO: load game over
+                    println!("game over!!");
+                    exit(0);
+                }
+
+                model.digit_idx += 1;
+            }
+            false
+        } else {
+            false
+        }
+    });
     if app.elapsed_frames() % PIE_SPAWN_RATE == 0 {
         model.spawn_pie();
     }
@@ -104,19 +149,29 @@ fn view(app: &App, model: &Model, frame: Frame) {
     let draw = app.draw();
     frame.clear(WHITE);
     for pie in &model.pies {
+        //pie background
         draw.ellipse()
             .radius(PIE_RADIUS)
             .color(PIE_BACKGROUND)
             .x_y(pie.pos.x, pie.pos.y);
+
+        //pie text
         draw.text(&pie.slices.to_string())
             .x_y(pie.pos.x, pie.pos.y)
             .font_size(SLICES_FONT_SIZE)
             .color(WHITE);
     }
 
+    //plate
     draw.rect()
         .w_h(PLATE_W, PLATE_H)
         .x_y(model.plate.x, PLATE_Y)
         .color(PLATE_COLOR);
+
+    draw.text(&model.digits[model.digit_idx].to_string())
+        .font_size(50)
+        .x(-(SCREEN_HALF as f32) + 50.)
+        .y(SCREEN_HALF as f32 - 50.)
+        .color(BLACK);
     draw.to_frame(app, &frame).unwrap();
 }
