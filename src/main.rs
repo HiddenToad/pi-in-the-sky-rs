@@ -1,9 +1,16 @@
 use std::{collections::HashMap, process::exit};
-
-use nannou::{color::white_point::E, prelude::*};
+use nannou_egui::{self, egui, Egui};
+use nannou::prelude::*;
 
 mod consts;
 use consts::*;
+
+#[derive(PartialEq)]
+enum Scene{
+    Start,
+    Game,
+    GameOver
+}
 
 fn main() {
     nannou::app(model).update(update).run();
@@ -64,8 +71,23 @@ struct Model {
     digit_idx: usize,
     abs_digit_idx: usize,
     digits: Vec<u8>,
+    scene: Scene
 }
 impl Model {
+    fn new(_window: window::Id) -> Self{
+        let mut model = Model {
+            _window,
+            pies: vec![],
+            plate: PiePlate { x: 0. },
+            digit_idx: 0,
+            abs_digit_idx: 0,
+            digits: vec![],
+            scene: Scene::Start
+        };
+        model.load_digits();
+        model
+    }
+
     fn load_digits(&mut self) {
         self.digits = reqwest::blocking::get(&format!(
             "https://api.pi.delivery/v1/pi?start={}&numberOfDigits={DIGITS_LOADED_AT_ONCE}",
@@ -95,19 +117,13 @@ fn model(app: &App) -> Model {
         .build()
         .unwrap();
 
-    let mut model = Model {
-        _window,
-        pies: vec![],
-        plate: PiePlate { x: 0. },
-        digit_idx: 0,
-        abs_digit_idx: 0,
-        digits: vec![],
-    };
-    model.load_digits();
-    model
+    Model::new(_window)
 }
 
 fn update(app: &App, model: &mut Model, update: Update) {
+    if model.scene != Scene::Game{
+        return;
+    }
     for pie in model.pies.iter_mut() {
         pie.velocity -= PIE_ACCEL;
         pie.pos.y += pie.velocity;
@@ -119,9 +135,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
         } else if collides {
             if let Some(digit) = model.digits.get(model.digit_idx) {
                 if pie.slices != *digit {
-                    //TODO: load game over
-                    println!("game over!!");
-                    exit(0);
+                    model.scene = Scene::GameOver;
                 }
 
                 model.digit_idx += 1;
@@ -141,11 +155,32 @@ fn event(app: &App, model: &mut Model, event: WindowEvent) {
         MouseMoved(pos) => {
             model.plate.x = pos.x;
         }
+        KeyPressed(key) => {
+            match key{
+                Key::Return => {
+                    match model.scene{
+                        Scene::Start | Scene::GameOver => {
+                           *model = Model::new(model._window);
+                            model.scene = Scene::Game;
+                        },
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
         _ => {}
     }
 }
 
-fn view(app: &App, model: &Model, frame: Frame) {
+fn start_view(app: &App, model: &Model, frame: Frame){
+    let draw = app.draw();
+    frame.clear(WHITE);
+    draw.text("Press ENTER to begin!").center_justify().x_y(0., 0.).font_size(30).color(BLACK);
+    draw.to_frame(app, &frame).unwrap();
+}
+
+fn game_view(app: &App, model: &Model, frame: Frame){
     let draw = app.draw();
     frame.clear(WHITE);
     for pie in &model.pies {
@@ -174,4 +209,24 @@ fn view(app: &App, model: &Model, frame: Frame) {
         .y(SCREEN_HALF as f32 - 50.)
         .color(BLACK);
     draw.to_frame(app, &frame).unwrap();
+}
+fn game_over_view(app: &App, model: &Model, frame: Frame){
+    let draw = app.draw();
+    frame.clear(WHITE);
+    draw.text("Game over! Press ENTER to retry, or ESC to quit!").center_justify().x_y(0., 0.).font_size(30).color(BLACK);
+    draw.to_frame(app, &frame).unwrap();
+}
+
+fn view(app: &App, model: &Model, frame: Frame) {
+    (match model.scene{
+        Scene::Start => {
+            start_view
+        },
+        Scene::Game => {
+            game_view
+        },
+        Scene::GameOver => {
+            game_over_view
+        }
+    })(app, model, frame)
 }
